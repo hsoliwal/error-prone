@@ -17,18 +17,19 @@
 package com.google.errorprone.bugpatterns;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static com.google.errorprone.VisitorState.memoize;
 import static com.google.errorprone.matchers.Description.NO_MATCH;
 import static com.google.errorprone.util.ASTHelpers.getSymbol;
 import static com.google.errorprone.util.ASTHelpers.hasAnnotation;
 import static com.google.errorprone.util.ASTHelpers.streamSuperMethods;
 import static com.google.errorprone.util.AnnotationNames.RESTRICTED_API_ANNOTATION;
+import static com.google.errorprone.util.MoreAnnotations.getTypes;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.BugPattern;
 import com.google.errorprone.BugPattern.SeverityLevel;
+import com.google.errorprone.ClassName;
 import com.google.errorprone.VisitorState;
 import com.google.errorprone.bugpatterns.BugChecker.AnnotationTreeMatcher;
 import com.google.errorprone.bugpatterns.BugChecker.MemberReferenceTreeMatcher;
@@ -38,9 +39,7 @@ import com.google.errorprone.bugpatterns.restrictedapi.Restriction;
 import com.google.errorprone.matchers.Description;
 import com.google.errorprone.matchers.Matcher;
 import com.google.errorprone.matchers.Matchers;
-import com.google.errorprone.suppliers.Supplier;
 import com.google.errorprone.util.ASTHelpers;
-import com.google.errorprone.util.MoreAnnotations;
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ExpressionTree;
@@ -49,7 +48,6 @@ import com.sun.source.tree.MemberReferenceTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.Tree;
-import com.sun.tools.javac.code.Attribute;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.TypeSymbol;
@@ -58,9 +56,8 @@ import com.sun.tools.javac.code.Types;
 import com.sun.tools.javac.tree.JCTree;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.type.TypeMirror;
 import org.jspecify.annotations.Nullable;
 
 /** Check for non-allowlisted callers to RestrictedApiChecker. */
@@ -201,12 +198,12 @@ public class RestrictedApiChecker extends BugChecker
         .orElse(NO_MATCH);
   }
 
-  private static Attribute.@Nullable Compound getRestrictedApiAnnotation(
+  private static @Nullable AnnotationMirror getRestrictedApiAnnotation(
       Symbol sym, VisitorState state) {
     if (sym == null) {
       return null;
     }
-    return sym.attribute(RESTRICTED_API_TYPE.get(state));
+    return sym.attribute(RESTRICTED_API_TYPE.symbol(state));
   }
 
   private Description checkRestriction(
@@ -253,20 +250,14 @@ public class RestrictedApiChecker extends BugChecker
 
   // TODO(bangert): Memoize these if necessary.
   private static Matcher<Tree> shouldAllowWithWarning(AnnotationMirror api) {
-    Optional<AnnotationValue> allowlistWithWarningAnnotations =
-        MoreAnnotations.getValue(api, "allowlistWithWarningAnnotations");
+    ImmutableList<TypeMirror> allowlistWithWarningAnnotations =
+        getTypes(api, "allowlistWithWarningAnnotations");
     // TODO(b/178905039): remove handling of legacy names
     if (allowlistWithWarningAnnotations.isEmpty()) {
-      allowlistWithWarningAnnotations =
-          MoreAnnotations.getValue(api, "whitelistWithWarningAnnotations");
+      allowlistWithWarningAnnotations = getTypes(api, "whitelistWithWarningAnnotations");
     }
-    return Matchers.hasAnyAnnotation(
-        allowlistWithWarningAnnotations
-            .map(MoreAnnotations::asTypes)
-            .orElse(Stream.empty())
-            .collect(toImmutableList()));
+    return Matchers.hasAnyAnnotation(allowlistWithWarningAnnotations);
   }
 
-  private static final Supplier<Symbol> RESTRICTED_API_TYPE =
-      memoize(state -> state.getSymbolFromString(RESTRICTED_API_ANNOTATION));
+  private static final ClassName RESTRICTED_API_TYPE = ClassName.of(RESTRICTED_API_ANNOTATION);
 }

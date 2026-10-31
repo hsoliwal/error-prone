@@ -17,13 +17,16 @@
 package com.google.errorprone.bugpatterns;
 
 import static com.google.errorprone.BugPattern.SeverityLevel.WARNING;
-import static com.google.errorprone.matchers.ProtobufMatchers.MESSAGE_LITE_TYPE;
-import static com.google.errorprone.matchers.ProtobufMatchers.MUTABLE_MESSAGE_LITE_TYPE;
+import static com.google.errorprone.matchers.ProtobufMatchers.MESSAGE_LITE;
+import static com.google.errorprone.matchers.ProtobufMatchers.MUTABLE_MESSAGE_LITE;
 import static com.google.errorprone.util.ASTHelpers.getReceiver;
 import static com.google.errorprone.util.ASTHelpers.getSymbol;
 import static com.google.errorprone.util.ASTHelpers.hasAnnotation;
 import static com.google.errorprone.util.ASTHelpers.isSameType;
 import static com.google.errorprone.util.ASTHelpers.isSubtype;
+import static com.google.errorprone.util.AnnotationNames.AUTO_BUILDER_ANNOTATION;
+import static com.google.errorprone.util.AnnotationNames.AUTO_VALUE_ANNOTATION;
+import static com.google.errorprone.util.AnnotationNames.AUTO_VALUE_BUILDER_ANNOTATION;
 import static javax.lang.model.element.Modifier.ABSTRACT;
 
 import com.google.common.collect.ImmutableMap;
@@ -103,26 +106,26 @@ public final class IgnoredPureGetter extends AbstractReturnValueIgnored {
 
     if (symbol.getModifiers().contains(ABSTRACT) && symbol.getParameters().isEmpty()) {
       // The return value of any abstract method on an @AutoValue needs to be used.
-      if (hasAnnotation(owner, "com.google.auto.value.AutoValue", state)) {
+      if (hasAnnotation(owner, AUTO_VALUE_ANNOTATION, state)) {
         return Optional.of(PureGetterKind.AUTO_VALUE);
       }
       // The return value of any abstract method on an @AutoBuilder (which doesn't return the
       // Builder itself) needs to be used.
-      if (hasAnnotation(owner, "com.google.auto.value.AutoBuilder", state)
+      if (hasAnnotation(owner, AUTO_BUILDER_ANNOTATION, state)
           && !isSameType(symbol.getReturnType(), owner.type, state)) {
         return Optional.of(PureGetterKind.AUTO_BUILDER);
       }
       // The return value of any abstract method on an @AutoValue.Builder (which doesn't return the
       // Builder itself) needs to be used.
-      if (hasAnnotation(owner, "com.google.auto.value.AutoValue.Builder", state)
+      if (hasAnnotation(owner, AUTO_VALUE_BUILDER_ANNOTATION, state)
           && !isSameType(symbol.getReturnType(), owner.type, state)) {
         return Optional.of(PureGetterKind.AUTO_VALUE_BUILDER);
       }
     }
 
     try {
-      if (isSubtype(owner.type, MESSAGE_LITE_TYPE.get(state), state)
-          && !isSubtype(owner.type, MUTABLE_MESSAGE_LITE_TYPE.get(state), state)) {
+      if (isSubtype(owner.type, MESSAGE_LITE, state)
+          && !isSubtype(owner.type, MUTABLE_MESSAGE_LITE, state)) {
         return Optional.of(PureGetterKind.PROTO);
       }
     } catch (Symbol.CompletionFailure ignore) {

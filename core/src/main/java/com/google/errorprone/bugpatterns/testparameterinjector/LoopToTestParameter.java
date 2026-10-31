@@ -17,7 +17,11 @@
 package com.google.errorprone.bugpatterns.testparameterinjector;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static com.google.errorprone.BugPattern.SeverityLevel.WARNING;
+import static com.google.errorprone.BugPattern.SeverityLevel.SUGGESTION;
+import static com.google.errorprone.bugpatterns.testparameterinjector.TestParameterInjectorUtils.TEST_PARAMETER;
+import static com.google.errorprone.bugpatterns.testparameterinjector.TestParameterInjectorUtils.TEST_PARAMETER_INJECTOR;
+import static com.google.errorprone.bugpatterns.testparameterinjector.TestParameterInjectorUtils.isEnumType;
+import static com.google.errorprone.bugpatterns.testparameterinjector.TestParameterInjectorUtils.isExhaustiveValues;
 import static com.google.errorprone.matchers.Description.NO_MATCH;
 import static com.google.errorprone.matchers.JUnitMatchers.JUNIT4_RUNNER_CLASS;
 import static com.google.errorprone.matchers.JUnitMatchers.JUNIT4_RUN_WITH_ANNOTATION;
@@ -82,7 +86,6 @@ import com.sun.tools.javac.parser.Tokens.TokenKind;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.type.TypeKind;
 
 /** A {@link BugChecker}; see the associated {@link BugPattern} annotation for details. */
@@ -92,7 +95,7 @@ import javax.lang.model.type.TypeKind;
             + " parameterization executes each input case in strict isolation, ensuring that a"
             + " single failure doesn't halt the rest of your test case while providing clear,"
             + " per-case reporting without the need for manual loops.",
-    severity = WARNING)
+    severity = SUGGESTION)
 public final class LoopToTestParameter extends BugChecker implements ClassTreeMatcher {
 
   private static final Matcher<ExpressionTree> ENUM_VALUES =
@@ -134,20 +137,13 @@ public final class LoopToTestParameter extends BugChecker implements ClassTreeMa
   // NOTE: don't use JUnitMatchers.TEST_CASE because we don't want to match JUnit3 test methods!
   private static final Matcher<MethodTree> TEST_METHOD = hasAnnotation(JUNIT4_TEST_ANNOTATION);
 
-  private static final String TEST_PARAMETER_INJECTOR_TYPE =
-      "com.google.testing.junit.testparameterinjector.TestParameterInjector";
-
-  private static final String TEST_PARAMETER_TYPE =
-      "com.google.testing.junit.testparameterinjector.TestParameter";
-
   private static final Matcher<AnnotationTree> COMPATIBLE_RUNNER =
       allOf(
           isType(JUNIT4_RUN_WITH_ANNOTATION),
           hasArgumentWithValue(
               "value",
               classLiteral(
-                  anyOf(
-                      isSameType(JUNIT4_RUNNER_CLASS), isSameType(TEST_PARAMETER_INJECTOR_TYPE)))));
+                  anyOf(isSameType(JUNIT4_RUNNER_CLASS), isSameType(TEST_PARAMETER_INJECTOR)))));
 
   /**
    * Skipping refactoring if the loop body contains custom control flow (continue, break, return)
@@ -184,8 +180,7 @@ public final class LoopToTestParameter extends BugChecker implements ClassTreeMa
 
     // Update the @RunWith annotation (or add one if there isn't already a compatible one).
     String runWith = SuggestedFixes.qualifyType(state, fix, JUNIT4_RUN_WITH_ANNOTATION);
-    String testParameterInjector =
-        SuggestedFixes.qualifyType(state, fix, TEST_PARAMETER_INJECTOR_TYPE);
+    String testParameterInjector = SuggestedFixes.qualifyType(state, fix, TEST_PARAMETER_INJECTOR);
 
     String newRunWith = String.format("@%s(%s.class)", runWith, testParameterInjector);
     if (runWithAnnotation == null) {
@@ -203,7 +198,7 @@ public final class LoopToTestParameter extends BugChecker implements ClassTreeMa
    */
   private static boolean compatibleParameters(MethodTree method, VisitorState state) {
     return method.getParameters().stream()
-        .allMatch(param -> hasAnnotation(getSymbol(param), TEST_PARAMETER_TYPE, state));
+        .allMatch(param -> hasAnnotation(getSymbol(param), TEST_PARAMETER, state));
   }
 
   /**
@@ -270,8 +265,7 @@ public final class LoopToTestParameter extends BugChecker implements ClassTreeMa
       values.add(value.get());
     }
     ImmutableList<String> result = values.build();
-    if (state.getTypes().unboxedTypeOrType(varType).getKind() == TypeKind.BOOLEAN
-        && ImmutableSet.copyOf(result).equals(ImmutableSet.of("true", "false"))) {
+    if (isExhaustiveValues(varType, result, state)) {
       return Optional.of(ImmutableList.of());
     }
     return Optional.of(result);
@@ -279,7 +273,7 @@ public final class LoopToTestParameter extends BugChecker implements ClassTreeMa
 
   private static boolean isSupportedParameterType(Type type, VisitorState state) {
     return isSameType(type, state.getSymtab().stringType, state)
-        || (type.tsym != null && type.tsym.getKind() == ElementKind.ENUM)
+        || isEnumType(type)
         || SUPPORTED_PRIMITIVE_TYPES.contains(state.getTypes().unboxedTypeOrType(type).getKind());
   }
 
@@ -372,7 +366,7 @@ public final class LoopToTestParameter extends BugChecker implements ClassTreeMa
     VariableTree varTree = loopTree.getVariable();
     String varType = SuggestedFixes.qualifyType(state, fix, getType(varTree));
     String varName = varTree.getName().toString();
-    String testParameter = SuggestedFixes.qualifyType(state, fix, TEST_PARAMETER_TYPE);
+    String testParameter = SuggestedFixes.qualifyType(state, fix, TEST_PARAMETER);
     if (values.isEmpty()) {
       return String.format("@%s %s %s", testParameter, varType, varName);
     }

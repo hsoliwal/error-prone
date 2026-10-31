@@ -480,6 +480,7 @@ import com.google.errorprone.bugpatterns.UnusedTypeParameter;
 import com.google.errorprone.bugpatterns.UnusedVariable;
 import com.google.errorprone.bugpatterns.UseCorrectAssertInTests;
 import com.google.errorprone.bugpatterns.UseEnumSwitch;
+import com.google.errorprone.bugpatterns.ValueClassEquals;
 import com.google.errorprone.bugpatterns.ValueClassIdentity;
 import com.google.errorprone.bugpatterns.VarChecker;
 import com.google.errorprone.bugpatterns.VarTypeName;
@@ -618,9 +619,11 @@ import com.google.errorprone.bugpatterns.nullness.UnnecessaryCheckNotNull;
 import com.google.errorprone.bugpatterns.nullness.UnsafeWildcard;
 import com.google.errorprone.bugpatterns.nullness.VoidMissingNullable;
 import com.google.errorprone.bugpatterns.overloading.InconsistentOverloads;
+import com.google.errorprone.bugpatterns.testparameterinjector.AlmostExhaustiveTestParameter;
 import com.google.errorprone.bugpatterns.testparameterinjector.LoopToTestParameter;
-import com.google.errorprone.bugpatterns.testparameterinjector.PreferTestParameter;
 import com.google.errorprone.bugpatterns.testparameterinjector.SimplifyTestParameter;
+import com.google.errorprone.bugpatterns.testparameterinjector.SingleTestParameter;
+import com.google.errorprone.bugpatterns.testparameterinjector.SingleValueTestParameter;
 import com.google.errorprone.bugpatterns.testparameterinjector.TestParametersNotInitialized;
 import com.google.errorprone.bugpatterns.threadsafety.DoubleCheckedLocking;
 import com.google.errorprone.bugpatterns.threadsafety.GuardedByChecker;
@@ -1082,7 +1085,6 @@ public final class BuiltInCheckerSuppliers {
           LongDoubleConversion.class,
           LongFloatConversion.class,
           LoopOverCharArray.class,
-          LoopToTestParameter.class,
           MalformedInlineTag.class,
           MathAbsoluteNegative.class,
           MemoizeConstantVisitorStateLookups.class,
@@ -1140,7 +1142,6 @@ public final class BuiltInCheckerSuppliers {
           PreconditionsCheckNotNullRepeated.class,
           PreferCharsetOverload.class,
           PreferInstanceofOverGetKind.class,
-          PreferTestParameter.class,
           PreferThrowsTag.class,
           PrimitiveAtomicReference.class,
           ProtectedMembersInFinalClass.class,
@@ -1223,6 +1224,7 @@ public final class BuiltInCheckerSuppliers {
           UnusedTypeParameter.class,
           UnusedVariable.class,
           UseBinds.class,
+          ValueClassEquals.class,
           VariableNameSameAsType.class,
           VoidUsed.class,
           WaitNotInLoop.class,
@@ -1236,6 +1238,7 @@ public final class BuiltInCheckerSuppliers {
           // keep-sorted start
           AddNullMarkedToClass.class,
           AddNullMarkedToPackageInfo.class,
+          AlmostExhaustiveTestParameter.class,
           AnnotationMirrorToString.class,
           AnnotationPosition.class,
           AnnotationValueToString.class,
@@ -1297,6 +1300,7 @@ public final class BuiltInCheckerSuppliers {
           Java8ApiChecker.class,
           LambdaFunctionalInterface.class,
           LongLiteralLowerCaseSuffix.class,
+          LoopToTestParameter.class,
           MethodCanBeStatic.class,
           MissingBraces.class,
           MissingDefault.class,
@@ -1334,6 +1338,8 @@ public final class BuiltInCheckerSuppliers {
           ReturnsNullCollection.class,
           ScopeOnModule.class,
           SimplifyTestParameter.class,
+          SingleTestParameter.class,
+          SingleValueTestParameter.class,
           StaticOrDefaultInterfaceMethod.class,
           StaticQualifiedUsingExpression.class,
           StringFormatWithLiteral.class,
