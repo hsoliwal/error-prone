@@ -36,7 +36,7 @@
     <junit.version>4.13.2</junit.version>
     <dataflow.version>3.41.0-eisop1</dataflow.version>
     <mockito.version>5.24.0</mockito.version>
-    <compile.testing.version>0.23.0</compile.testing.version>
+    <compile.testing.version>0.24.0</compile.testing.version>
     <caffeine.version>3.3.0</caffeine.version>
     <flogger.version>0.9</flogger.version>
     <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
@@ -46,6 +46,7 @@
     <grpc.version>1.43.3</grpc.version>
     <jspecify.version>1.0.1</jspecify.version>
     <google-java-format.version>1.37.0</google-java-format.version>
+    <snakeyaml.version>2.7</snakeyaml.version>
   </properties>
 
   <organization>
