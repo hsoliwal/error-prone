@@ -63,6 +63,7 @@ import com.google.errorprone.bugpatterns.BigDecimalEquals;
 import com.google.errorprone.bugpatterns.BigDecimalLiteralDouble;
 import com.google.errorprone.bugpatterns.BooleanLiteral;
 import com.google.errorprone.bugpatterns.BooleanParameter;
+import com.google.errorprone.bugpatterns.BootclasspathShadowing;
 import com.google.errorprone.bugpatterns.BoxedPrimitiveConstructor;
 import com.google.errorprone.bugpatterns.BoxedPrimitiveEquality;
 import com.google.errorprone.bugpatterns.BoxingComparator;
@@ -116,6 +117,7 @@ import com.google.errorprone.bugpatterns.DeprecatedVariable;
 import com.google.errorprone.bugpatterns.DifferentNameButSame;
 import com.google.errorprone.bugpatterns.DirectInvocationOnMock;
 import com.google.errorprone.bugpatterns.DiscardedPostfixExpression;
+import com.google.errorprone.bugpatterns.DiscouragedHashKey;
 import com.google.errorprone.bugpatterns.DistinctVarargsChecker;
 import com.google.errorprone.bugpatterns.DoNotCallChecker;
 import com.google.errorprone.bugpatterns.DoNotCallSuggester;
@@ -975,6 +977,7 @@ public final class BuiltInCheckerSuppliers {
           DefaultPackage.class,
           DeprecatedVariable.class,
           DirectInvocationOnMock.class,
+          DiscouragedHashKey.class,
           DistinctVarargsChecker.class,
           DoNotCallSuggester.class,
           DoNotClaimAnnotations.class,
@@ -1251,6 +1254,7 @@ public final class BuiltInCheckerSuppliers {
           BinderIdentityRestoredDangerously.class, // TODO: enable this by default.
           BindingToUnqualifiedCommonType.class,
           BooleanParameter.class,
+          BootclasspathShadowing.class,
           BuilderReturnThis.class,
           CanIgnoreReturnValueSuggester.class,
           CannotMockFinalClass.class,

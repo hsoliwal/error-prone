@@ -2198,4 +2198,203 @@ public final class Caller {
             """)
         .doTest();
   }
+
+  @Test
+  public void genericBuilderInferredFromRemovedClassParamOnChainedReceiver() {
+    refactoringTestHelper
+        .allowBreakingChanges()
+        .addInputLines(
+            "Client.java",
+            """
+            import com.google.errorprone.annotations.InlineMe;
+            import java.util.List;
+
+            public final class Client {
+              public static final class Builder<T> {
+                public Builder<T> setItems(List<T> items) {
+                  return this;
+                }
+
+                public Client build() {
+                  return new Client();
+                }
+              }
+
+              @Deprecated
+              @InlineMe(replacement = "Client.newBuilder()", imports = "Client")
+              public static <T> Builder<T> newBuilder(Class<T> clazz) {
+                return newBuilder();
+              }
+
+              public static <T> Builder<T> newBuilder() {
+                return new Builder<>();
+              }
+
+              void test(List<String> items) {
+                // TODO(b/583897336): Preserve inferred type argument <String> on Client.newBuilder()
+                // when inlining drops Class<T> parameter on a chained receiver.
+                Client c = Client.newBuilder(String.class).setItems(items).build();
+              }
+            }
+            """)
+        .addOutputLines(
+            "Client.java",
+            """
+            import com.google.errorprone.annotations.InlineMe;
+            import java.util.List;
+
+            public final class Client {
+              public static final class Builder<T> {
+                public Builder<T> setItems(List<T> items) {
+                  return this;
+                }
+
+                public Client build() {
+                  return new Client();
+                }
+              }
+
+              @Deprecated
+              @InlineMe(replacement = "Client.newBuilder()", imports = "Client")
+              public static <T> Builder<T> newBuilder(Class<T> clazz) {
+                return newBuilder();
+              }
+
+              public static <T> Builder<T> newBuilder() {
+                return new Builder<>();
+              }
+
+              void test(List<String> items) {
+                // TODO(b/583897336): Preserve inferred type argument <String> on Client.newBuilder()
+                // when inlining drops Class<T> parameter on a chained receiver.
+                Client c = Client.newBuilder().setItems(items).build();
+              }
+            }
+            """)
+        .doTest();
+  }
+
+  @Test
+  public void droppedArgumentThrowingCheckedExceptionInTryBlock() {
+    refactoringTestHelper
+        .allowBreakingChanges()
+        .addInputLines(
+            "Client.java",
+            """
+            import com.google.errorprone.annotations.InlineMe;
+            import java.io.IOException;
+
+            public final class Client {
+              @Deprecated
+              @InlineMe(replacement = "this.call()")
+              public void call(String unused) {
+                call();
+              }
+
+              public void call() {}
+
+              static String readValue() throws IOException {
+                throw new IOException();
+              }
+
+              void test() {
+                try {
+                  // TODO(b/583897542): Do not drop an argument expression that throws a checked
+                  // exception caught by an enclosing try-catch block (or side-effecting call).
+                  call(readValue());
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              }
+            }
+            """)
+        .addOutputLines(
+            "Client.java",
+            """
+            import com.google.errorprone.annotations.InlineMe;
+            import java.io.IOException;
+
+            public final class Client {
+              @Deprecated
+              @InlineMe(replacement = "this.call()")
+              public void call(String unused) {
+                call();
+              }
+
+              public void call() {}
+
+              static String readValue() throws IOException {
+                throw new IOException();
+              }
+
+              void test() {
+                try {
+                  // TODO(b/583897542): Do not drop an argument expression that throws a checked
+                  // exception caught by an enclosing try-catch block (or side-effecting call).
+                  call();
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              }
+            }
+            """)
+        .doTest();
+  }
+
+  // TODO(b/584202599): Inlining a poly-expression argument into receiver position drops
+  // the target type, producing uncompilable Stream<Object>.
+  @Test
+  public void receiverInferenceLostForPolyExpressionArgument() {
+    refactoringTestHelper
+        .allowBreakingChanges()
+        .addInputLines(
+            "Client.java",
+            """
+            import com.google.errorprone.annotations.InlineMe;
+            import java.util.Optional;
+            import java.util.stream.Stream;
+
+            public final class Client {
+              @Deprecated
+              @InlineMe(replacement = "optional.stream()")
+              public static <T> Stream<T> stream(Optional<T> optional) {
+                return optional.stream();
+              }
+            }
+            """)
+        .expectUnchanged()
+        .addInputLines(
+            "Test.java",
+            """
+            import java.util.Optional;
+            import java.util.stream.Stream;
+
+            class Test {
+              Stream<String> empty() {
+                return Client.stream(Optional.empty());
+              }
+
+              Stream<String> ternary(boolean cond) {
+                return Client.stream(cond ? Optional.of("a") : Optional.empty());
+              }
+            }
+            """)
+        .addOutputLines(
+            "Test.java",
+            """
+            import java.util.Optional;
+            import java.util.stream.Stream;
+
+            class Test {
+              Stream<String> empty() {
+                return Optional.empty().stream();
+              }
+
+              Stream<String> ternary(boolean cond) {
+                return (cond ? Optional.of("a") : Optional.empty()).stream();
+              }
+            }
+            """)
+        .doTest();
+  }
 }

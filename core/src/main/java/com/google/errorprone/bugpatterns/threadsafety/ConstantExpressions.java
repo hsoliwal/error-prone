@@ -23,8 +23,8 @@ import static com.google.errorprone.matchers.Matchers.anyOf;
 import static com.google.errorprone.matchers.Matchers.instanceEqualsInvocation;
 import static com.google.errorprone.matchers.Matchers.not;
 import static com.google.errorprone.matchers.Matchers.staticEqualsInvocation;
-import static com.google.errorprone.matchers.ProtobufMatchers.GENERATED_MESSAGE_CLASS;
-import static com.google.errorprone.matchers.ProtobufMatchers.MESSAGE_LITE_CLASS;
+import static com.google.errorprone.matchers.ProtobufMatchers.GENERATED_MESSAGE;
+import static com.google.errorprone.matchers.ProtobufMatchers.MESSAGE_LITE;
 import static com.google.errorprone.matchers.ProtobufMatchers.PROTO_TIME_STATIC_FACTORIES;
 import static com.google.errorprone.matchers.method.MethodMatchers.constructor;
 import static com.google.errorprone.matchers.method.MethodMatchers.instanceMethod;
@@ -88,15 +88,14 @@ public final class ConstantExpressions {
                 instanceMethod()
                     .onDescendantOfAny(wellKnownMutability.getKnownImmutableClasses().keySet()));
     this.threadSafety =
-        memoize(
-            s ->
-                ThreadSafety.builder()
-                    .purpose(ThreadSafety.Purpose.FOR_IMMUTABLE_CHECKER)
-                    .markerAnnotationInherited(true)
-                    .knownTypes(wellKnownMutability)
-                    .acceptedAnnotations(ImmutableSet.of(Immutable.class.getName()))
-                    .markerAnnotations(ImmutableSet.of())
-                    .build(s));
+        memoize(s ->
+            ThreadSafety.builder()
+                .purpose(ThreadSafety.Purpose.FOR_IMMUTABLE_CHECKER)
+                .markerAnnotationInherited(true)
+                .knownTypes(wellKnownMutability)
+                .acceptedAnnotations(ImmutableSet.of(Immutable.class.getName()))
+                .markerAnnotations(ImmutableSet.of())
+                .build(s));
   }
 
   public static ConstantExpressions fromFlags(ErrorProneFlags flags) {
@@ -111,6 +110,9 @@ public final class ConstantExpressions {
   /**
    * Scans an {@link ExpressionTree} to find anything guaranteed to be false or true if this
    * expression is true.
+   *
+   * <p>{@link #mayImply} and {@link #factKey(ExpressionTree)} mirror the expressions handled here,
+   * so update them when adding new kinds of facts.
    */
   public Truthiness truthiness(ExpressionTree tree, boolean not, VisitorState state) {
     ImmutableSet.Builder<ConstantExpression> requiredTrue = ImmutableSet.builder();
@@ -139,14 +141,13 @@ public final class ConstantExpressions {
       public Void visitBinary(BinaryTree tree, Void unused) {
         if (tree.getKind().equals(Kind.EQUAL_TO) || tree.getKind().equals(Kind.NOT_EQUAL_TO)) {
           constantExpression(tree, state)
-              .ifPresent(
-                  e -> {
-                    if (tree.getKind().equals(Kind.NOT_EQUAL_TO)) {
-                      withNegation(() -> add(e));
-                    } else {
-                      add(e);
-                    }
-                  });
+              .ifPresent(e -> {
+                if (tree.getKind().equals(Kind.NOT_EQUAL_TO)) {
+                  withNegation(() -> add(e));
+                } else {
+                  add(e);
+                }
+              });
         } else if (negated
             ? tree.getKind().equals(Kind.CONDITIONAL_OR)
             : tree.getKind().equals(Kind.CONDITIONAL_AND)) {
@@ -190,6 +191,54 @@ public final class ConstantExpressions {
     }
 
     return new Truthiness(requiredTrue.build(), requiredFalse.build());
+  }
+
+  /**
+   * Returns whether {@link #truthiness} of {@code tree} may contain a fact with the given {@link
+   * #factKey(ConstantExpression) key}.
+   *
+   * <p>This mirrors the traversal in {@link #truthiness} without calling {@link
+   * #constantExpression}, which matches each method invocation against the known pure methods.
+   */
+  public static boolean mayImply(ExpressionTree tree, boolean not, Object key) {
+    tree = stripParentheses(tree);
+    if (tree instanceof UnaryTree u && u.getKind() == Kind.LOGICAL_COMPLEMENT) {
+      return mayImply(u.getExpression(), !not, key);
+    }
+    if (tree instanceof BinaryTree b
+        && b.getKind() == (not ? Kind.CONDITIONAL_OR : Kind.CONDITIONAL_AND)) {
+      return mayImply(b.getLeftOperand(), not, key) || mayImply(b.getRightOperand(), not, key);
+    }
+    return key.equals(factKey(tree));
+  }
+
+  /**
+   * Returns the {@link #factKey(ConstantExpression) key} that any fact {@link #truthiness} derives
+   * directly from {@code tree} would have, or {@code null} if {@code tree} cannot yield a fact.
+   *
+   * <p>Keys are opaque, and should only be compared using {@link Object#equals}.
+   */
+  public static @Nullable Object factKey(ExpressionTree tree) {
+    tree = stripParentheses(tree);
+    return switch (tree.getKind()) {
+      case EQUAL_TO, NOT_EQUAL_TO -> ConstantExpression.ConstantEquals.class;
+      case METHOD_INVOCATION -> getSymbol(tree);
+      case IDENTIFIER, MEMBER_SELECT ->
+          getSymbol(tree) instanceof VarSymbol sym && isConsideredFinal(sym) ? sym : null;
+      default -> null;
+    };
+  }
+
+  /**
+   * Returns the key of {@code fact}, which must be from a {@link Truthiness}. Equal facts have
+   * equal keys, which match {@link #factKey(ExpressionTree)} for the trees they're derived from.
+   */
+  public static Object factKey(ConstantExpression fact) {
+    return switch (fact) {
+      case ConstantExpression.PureMethodInvocation p -> p.symbol();
+      case ConstantExpression.ConstantEquals unused -> ConstantExpression.ConstantEquals.class;
+      case ConstantExpression.Literal l -> l;
+    };
   }
 
   /** Represents a constant expression. */
@@ -380,7 +429,7 @@ public final class ConstantExpressions {
                   "com.google.common.collect.ImmutableSortedSet",
                   "com.google.common.collect.ImmutableTable",
                   "com.google.common.collect.Range"),
-          staticMethod().onClass(GENERATED_MESSAGE_CLASS),
+          staticMethod().onClass(GENERATED_MESSAGE),
           staticMethod()
               .onClass("java.time.Duration")
               .namedAnyOf("ofNanos", "ofMillis", "ofSeconds", "ofMinutes", "ofHours", "ofDays")
@@ -442,7 +491,7 @@ public final class ConstantExpressions {
             return hasAnnotation(symbol.owner, AUTO_VALUE_ANNOTATION, state)
                 && symbol.getModifiers().contains(ABSTRACT);
           },
-          staticMethod().onDescendantOf(MESSAGE_LITE_CLASS).named("getDefaultInstance"),
+          staticMethod().onDescendantOf(MESSAGE_LITE).named("getDefaultInstance"),
           allOf(
               instanceEqualsInvocation(),
               (t, s) -> {

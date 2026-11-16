@@ -65,7 +65,6 @@ import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
-import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.TreeScanner;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
@@ -252,7 +251,9 @@ public final class UnusedMethod extends BugChecker implements CompilationUnitTre
     }
     new MethodFinder(state).scan(state.getPath(), null);
 
-    class FilterUsedMethods extends TreePathScanner<Void, Void> {
+    // This doesn't need the current path, so use a TreeScanner to avoid creating a TreePath for
+    // every node.
+    class FilterUsedMethods extends TreeScanner<Void, Void> {
       @Override
       public Void visitMemberSelect(MemberSelectTree memberSelectTree, Void unused) {
         Symbol symbol = getSymbol(memberSelectTree);
@@ -331,31 +332,28 @@ public final class UnusedMethod extends BugChecker implements CompilationUnitTre
             .findAny()
             // get the annotation value array as a set of Names,
             // normalizing unset value to the empty value
-            .map(
-                a ->
-                    getStrings(a, "value").stream()
-                        .map(state::getName)
-                        .map(Name::toString)
-                        .collect(toImmutableSet()))
+            .map(a ->
+                getStrings(a, "value").stream()
+                    .map(state::getName)
+                    .map(Name::toString)
+                    .collect(toImmutableSet()))
             // if no explicit method sources were specified, use method name instead
             .map(names -> names.isEmpty() ? ImmutableSet.of(sym.name.toString()) : names)
             // remove all potentially unused methods referenced by the @MethodSource
-            .ifPresent(
-                referencedNames ->
-                    unusedMethods
-                        .entrySet()
-                        .removeIf(
-                            e -> {
-                              Symbol unusedSym = e.getKey();
-                              String simpleName = unusedSym.getSimpleName().toString();
-                              return referencedNames.contains(simpleName)
-                                  || referencedNames.contains(
-                                      unusedSym.owner.getQualifiedName() + "#" + simpleName);
-                            }));
+            .ifPresent(referencedNames ->
+                unusedMethods
+                    .entrySet()
+                    .removeIf(e -> {
+                      Symbol unusedSym = e.getKey();
+                      String simpleName = unusedSym.getSimpleName().toString();
+                      return referencedNames.contains(simpleName)
+                          || referencedNames.contains(
+                              unusedSym.owner.getQualifiedName() + "#" + simpleName);
+                    }));
       }
     }
 
-    new FilterUsedMethods().scan(state.getPath(), null);
+    new FilterUsedMethods().scan(tree, null);
 
     if (ignoreUnusedMethods.get()) {
       return Description.NO_MATCH;
@@ -381,7 +379,7 @@ public final class UnusedMethod extends BugChecker implements CompilationUnitTre
 
   private ImmutableSet<ClassSymbol> getVisibleClasses(CompilationUnitTree tree) {
     ImmutableSet.Builder<ClassSymbol> classesMadeVisible = ImmutableSet.builder();
-    new TreePathScanner<Void, Void>() {
+    new TreeScanner<Void, Void>() {
       @Override
       public Void visitClass(ClassTree tree, Void unused) {
         var symbol = getSymbol(tree);
@@ -389,6 +387,12 @@ public final class UnusedMethod extends BugChecker implements CompilationUnitTre
           classesMadeVisible.add(symbol);
         }
         return super.visitClass(tree, null);
+      }
+
+      @Override
+      public Void visitMethod(MethodTree tree, Void unused) {
+        // Classes declared in methods are local or anonymous, so they can always be removed.
+        return null;
       }
     }.scan(tree, null);
     return classesMadeVisible.build();
