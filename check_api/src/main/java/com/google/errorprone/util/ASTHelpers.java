@@ -232,9 +232,13 @@ public final class ASTHelpers {
   }
 
   /**
-   * Gets the symbol for a tree. Returns null if this tree does not have a symbol because it is of
-   * the wrong type, if {@code tree} is null, or if the symbol cannot be found due to a compilation
-   * error.
+   * Gets the symbol that a tree declares or refers to.
+   *
+   * <p>Returns null if {@code tree} is null, if it is a kind of tree that has no symbol, or if
+   * javac attached no symbol to an identifier or member select, as for some module names. A {@link
+   * ParenthesizedTree} has no symbol, so {@code getSymbol((x))} returns null where {@code
+   * getSymbol(x)} returns the symbol of {@code x}. Call {@link #stripParentheses(Tree)} first where
+   * the parentheses do not matter.
    */
   public static @Nullable Symbol getSymbol(Tree tree) {
     if (tree instanceof AnnotationTree annotationTree) {
@@ -328,11 +332,14 @@ public final class ASTHelpers {
    * also means that this symbol is not an override.
    */
   public static boolean canBeRemoved(Symbol symbol, VisitorState state) {
+    if (!isEffectivelyPrivate(symbol)) {
+      return false;
+    }
     if (symbol instanceof MethodSymbol methodSymbol
         && !findSuperMethods(methodSymbol, state.getTypes()).isEmpty()) {
       return false;
     }
-    return isEffectivelyPrivate(symbol);
+    return true;
   }
 
   /** See {@link #canBeRemoved(Symbol, VisitorState)}. */
@@ -348,23 +355,22 @@ public final class ASTHelpers {
   /** Returns whether this symbol or any of its owners are private. */
   public static boolean isEffectivelyPrivate(Symbol symbol) {
     return enclosingElements(symbol)
-        .anyMatch(
-            s -> {
-              if (s.isPrivate()) {
-                return true;
-              }
-              if (s instanceof ClassSymbol) {
-                // Anonymous classes. (Note: packages can be anonymous too.)
-                if (s.isAnonymous()) {
-                  return true;
-                }
-                // Local classes have a method as an owner.
-                if (s.owner instanceof MethodSymbol) {
-                  return true;
-                }
-              }
-              return false;
-            });
+        .anyMatch(s -> {
+          if (s.isPrivate()) {
+            return true;
+          }
+          if (s instanceof ClassSymbol) {
+            // Anonymous classes. (Note: packages can be anonymous too.)
+            if (s.isAnonymous()) {
+              return true;
+            }
+            // Local classes have a method as an owner.
+            if (s.owner instanceof MethodSymbol) {
+              return true;
+            }
+          }
+          return false;
+        });
   }
 
   /** Checks whether an expression requires parentheses. */
@@ -759,20 +765,18 @@ public final class ASTHelpers {
 
     // Iterate over all classes and interfaces that startClass inherits from.
     return types.closure(startClass).stream()
-        .flatMap(
-            (Type superClass) -> {
-              // Iterate over all the methods declared in superClass.
-              TypeSymbol superClassSymbol = superClass.tsym;
-              Scope superClassSymbols = superClassSymbol.members();
-              if (superClassSymbols == null) { // Can be null if superClass is a type variable
-                return Stream.empty();
-              }
-              return stream(
-                      superClassSymbols.getSymbolsByName(
-                          name, matchesMethodPredicate, NON_RECURSIVE))
-                  // By definition of the filter, we know that the symbol is a MethodSymbol.
-                  .map(symbol -> (MethodSymbol) symbol);
-            });
+        .flatMap((Type superClass) -> {
+          // Iterate over all the methods declared in superClass.
+          TypeSymbol superClassSymbol = superClass.tsym;
+          Scope superClassSymbols = superClassSymbol.members();
+          if (superClassSymbols == null) { // Can be null if superClass is a type variable
+            return Stream.empty();
+          }
+          return stream(
+                  superClassSymbols.getSymbolsByName(name, matchesMethodPredicate, NON_RECURSIVE))
+              // By definition of the filter, we know that the symbol is a MethodSymbol.
+              .map(symbol -> (MethodSymbol) symbol);
+        });
   }
 
   /**
@@ -994,7 +998,7 @@ public final class ASTHelpers {
         .get(
             annotationName,
             name -> {
-              if (name.equals(NULL_MARKED.binaryName(state))) {
+              if (name.equals(NULL_MARKED_ANNOTATION.binaryName(state))) {
                 /*
                  * We avoid searching for @Inherited on NullMarked not just because we already know
                  * the answer but also because the search would cause issues under --release 8 on
@@ -1118,9 +1122,8 @@ public final class ASTHelpers {
 
   private static boolean hasDirectAnnotationWithSimpleName(
       Stream<? extends AnnotationMirror> annotations, String simpleName) {
-    return annotations.anyMatch(
-        annotation ->
-            MoreAnnotations.asElement(annotation).getSimpleName().contentEquals(simpleName));
+    return annotations.anyMatch(annotation ->
+        MoreAnnotations.asElement(annotation).getSimpleName().contentEquals(simpleName));
   }
 
   /**
@@ -1938,12 +1941,11 @@ public final class ASTHelpers {
    */
   public static boolean isInStaticInitializer(VisitorState state) {
     return stream(state.getPath())
-        .anyMatch(
-            tree ->
-                (tree instanceof VariableTree && variableIsStaticFinal((VarSymbol) getSymbol(tree)))
-                    || (tree instanceof AssignmentTree assignmentTree
-                        && getSymbol(assignmentTree.getVariable()) instanceof VarSymbol varSymbol
-                        && variableIsStaticFinal(varSymbol)));
+        .anyMatch(tree ->
+            (tree instanceof VariableTree && variableIsStaticFinal((VarSymbol) getSymbol(tree)))
+                || (tree instanceof AssignmentTree assignmentTree
+                    && getSymbol(assignmentTree.getVariable()) instanceof VarSymbol varSymbol
+                    && variableIsStaticFinal(varSymbol)));
   }
 
   /**
@@ -2441,8 +2443,6 @@ public final class ASTHelpers {
         // DEFAULT_CASE_LABEL is in Java 21, so we're stuck stringifying for now.
         || labels.stream().anyMatch(label -> label.getKind().name().equals("DEFAULT_CASE_LABEL"));
   }
-
-  private static final ClassName NULL_MARKED = ClassName.of(NULL_MARKED_ANNOTATION);
 
   private ASTHelpers() {}
 }

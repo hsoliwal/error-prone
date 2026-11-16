@@ -38,6 +38,7 @@ import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.LiteralTree;
+import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.UnaryTree;
@@ -122,7 +123,12 @@ public class LoopConditionChecker extends BugChecker
           default -> {}
         }
       }
-      return false;
+      return ASTHelpers.constValue(tree) != null;
+    }
+
+    @Override
+    public Boolean visitMemberSelect(MemberSelectTree tree, Void unused) {
+      return ASTHelpers.constValue(tree) != null;
     }
 
     @Override

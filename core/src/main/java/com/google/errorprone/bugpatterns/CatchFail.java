@@ -31,7 +31,6 @@ import static java.util.stream.Collectors.joining;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.errorprone.BugPattern;
-import com.google.errorprone.ClassName;
 import com.google.errorprone.VisitorState;
 import com.google.errorprone.bugpatterns.BugChecker.TryTreeMatcher;
 import com.google.errorprone.fixes.Fix;
@@ -84,10 +83,9 @@ public class CatchFail extends BugChecker implements TryTreeMatcher {
     // Find catch blocks that contain only a call to fail, and that ignore the caught exception.
     ImmutableList<CatchTree> catchBlocks =
         tree.getCatches().stream()
-            .filter(
-                c ->
-                    c.getBlock().getStatements().size() == 1
-                        && FAIL_METHOD.matches(getOnlyElement(c.getBlock().getStatements()), state))
+            .filter(c ->
+                c.getBlock().getStatements().size() == 1
+                    && FAIL_METHOD.matches(getOnlyElement(c.getBlock().getStatements()), state))
             .filter(c -> !catchVariableIsUsed(c))
             .collect(toImmutableList());
     if (catchBlocks.isEmpty()) {
@@ -115,24 +113,23 @@ public class CatchFail extends BugChecker implements TryTreeMatcher {
   private static Optional<Fix> rethrowFix(
       ImmutableList<CatchTree> catchBlocks, VisitorState state) {
     SuggestedFix.Builder fix = SuggestedFix.builder();
-    catchBlocks.forEach(
-        c -> {
-          // e.g.
-          // fail("message") -> throw new AssertionError("message", cause);
-          // assertWithMessage("message format %s", 42) ->
-          //     throw new AssertionError(String.format("message format %s", 42), cause);
-          StatementTree statementTree = getOnlyElement(c.getBlock().getStatements());
-          MethodInvocationTree methodInvocationTree =
-              (MethodInvocationTree) ((ExpressionStatementTree) statementTree).getExpression();
-          if (!methodInvocationTree.getArguments().isEmpty()) {
-            String message = getMessageOrFormat(methodInvocationTree, state);
-            // only catch and rethrow to add additional context, not for raw `fail()` calls
-            fix.replace(
-                statementTree,
-                String.format(
-                    "throw new AssertionError(%s, %s);", message, c.getParameter().getName()));
-          }
-        });
+    catchBlocks.forEach(c -> {
+      // e.g.
+      // fail("message") -> throw new AssertionError("message", cause);
+      // assertWithMessage("message format %s", 42) ->
+      //     throw new AssertionError(String.format("message format %s", 42), cause);
+      StatementTree statementTree = getOnlyElement(c.getBlock().getStatements());
+      MethodInvocationTree methodInvocationTree =
+          (MethodInvocationTree) ((ExpressionStatementTree) statementTree).getExpression();
+      if (!methodInvocationTree.getArguments().isEmpty()) {
+        String message = getMessageOrFormat(methodInvocationTree, state);
+        // only catch and rethrow to add additional context, not for raw `fail()` calls
+        fix.replace(
+            statementTree,
+            String.format(
+                "throw new AssertionError(%s, %s);", message, c.getParameter().getName()));
+      }
+    });
     return fix.isEmpty() ? Optional.empty() : Optional.of(fix.build());
   }
 
@@ -186,11 +183,10 @@ public class CatchFail extends BugChecker implements TryTreeMatcher {
         catchBlocks.stream()
             .map(c -> ASTHelpers.getType(c.getParameter()))
             // convert multi-catch to a list of component types
-            .flatMap(
-                t ->
-                    t instanceof UnionClassType unionClassType
-                        ? stream(unionClassType.getAlternativeTypes())
-                        : Stream.of(t))
+            .flatMap(t ->
+                t instanceof UnionClassType unionClassType
+                    ? stream(unionClassType.getAlternativeTypes())
+                    : Stream.of(t))
             .filter(t -> thrownTypes.stream().noneMatch(x -> types.isAssignable(t, x)))
             .collect(toImmutableList());
     if (!toThrow.isEmpty()) {
@@ -217,7 +213,7 @@ public class CatchFail extends BugChecker implements TryTreeMatcher {
 
   /** Returns true if the given method symbol has a {@code @Test(expected=...)} annotation. */
   private static boolean isExpectedExceptionTest(MethodSymbol sym, VisitorState state) {
-    Compound attribute = sym.attribute(ORG_JUNIT_TEST.symbol(state));
+    Compound attribute = sym.attribute(JUnitMatchers.JUNIT4_TEST_ANNOTATION.symbol(state));
     if (attribute == null) {
       return false;
     }
@@ -244,7 +240,4 @@ public class CatchFail extends BugChecker implements TryTreeMatcher {
 
   private static final Supplier<Name> EXPECTED =
       VisitorState.memoize(state -> state.getName("expected"));
-
-  private static final ClassName ORG_JUNIT_TEST =
-      ClassName.of(JUnitMatchers.JUNIT4_TEST_ANNOTATION);
 }

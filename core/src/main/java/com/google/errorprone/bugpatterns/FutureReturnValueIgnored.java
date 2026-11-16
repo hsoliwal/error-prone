@@ -50,11 +50,10 @@ import javax.inject.Inject;
 public final class FutureReturnValueIgnored extends AbstractReturnValueIgnored
     implements ReturnTreeMatcher {
   private static final Supplier<Type> FUTURE =
-      memoize(
-          state -> {
-            var symbol = state.getElements().getTypeElement("java.util.concurrent.Future");
-            return symbol == null ? null : (Type) symbol.asType();
-          });
+      memoize(state -> {
+        var symbol = state.getElements().getTypeElement("java.util.concurrent.Future");
+        return symbol == null ? null : (Type) symbol.asType();
+      });
 
   private static final Matcher<ExpressionTree> IGNORED_METHODS =
       anyOf(
@@ -105,6 +104,11 @@ public final class FutureReturnValueIgnored extends AbstractReturnValueIgnored
               && ASTHelpers.isSubtype(
                   ASTHelpers.getUpperBound(resultType, state.getTypes()), futureType, state);
         }
+        Type returnType = sym.getReturnType();
+        if (!ASTHelpers.isSubtype(
+            ASTHelpers.getUpperBound(returnType, state.getTypes()), futureType, state)) {
+          return false;
+        }
         if (hasAnnotation(sym, CAN_IGNORE_RETURN_VALUE_ANNOTATION, state)) {
           return false;
         }
@@ -120,12 +124,7 @@ public final class FutureReturnValueIgnored extends AbstractReturnValueIgnored
             return false;
           }
         }
-        if (IGNORED_METHODS.matches(tree, state)) {
-          return false;
-        }
-        Type returnType = sym.getReturnType();
-        return ASTHelpers.isSubtype(
-            ASTHelpers.getUpperBound(returnType, state.getTypes()), futureType, state);
+        return !IGNORED_METHODS.matches(tree, state);
       };
 
   @Inject

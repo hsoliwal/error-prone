@@ -251,10 +251,9 @@ public final class Matchers {
 
   /** Matches an AST node that represents a local variable or parameter. */
   public static Matcher<ExpressionTree> isVariable() {
-    return symbolMatcher(
-        (symbol, state) ->
-            symbol.getKind() == ElementKind.LOCAL_VARIABLE
-                || symbol.getKind() == ElementKind.PARAMETER);
+    return symbolMatcher((symbol, state) ->
+        symbol.getKind() == ElementKind.LOCAL_VARIABLE
+            || symbol.getKind() == ElementKind.PARAMETER);
   }
 
   /**
@@ -472,9 +471,8 @@ public final class Matchers {
 
   /** Matches an AST node if its type is a primitive array type. */
   public static <T extends Tree> Matcher<T> isPrimitiveArrayType() {
-    return typePredicateMatcher(
-        (type, state) ->
-            state.getTypes().isArray(type) && state.getTypes().elemtype(type).isPrimitive());
+    return typePredicateMatcher((type, state) ->
+        state.getTypes().isArray(type) && state.getTypes().elemtype(type).isPrimitive());
   }
 
   /** Matches an AST node if its type is a primitive type. */
@@ -1790,7 +1788,7 @@ public final class Matchers {
   /** Method signature of serialization methods. */
   public static final Matcher<MethodTree> SERIALIZATION_METHODS =
       allOf(
-          (t, s) -> isSubtype(getSymbol(t).owner.type, s.getSymtab().serializableType, s),
+          // Check the cheap conditions on the method itself before the subtype check.
           anyOf(
               allOf(
                   methodIsNamed("readObject"),
@@ -1800,7 +1798,8 @@ public final class Matchers {
                   methodHasParameters(isSameType(ClassName.of("java.io.ObjectOutputStream")))),
               allOf(methodIsNamed("readObjectNoData"), methodReturns(isVoidType())),
               allOf(methodIsNamed("readResolve"), methodReturns(OBJECT_TYPE)),
-              allOf(methodIsNamed("writeReplace"), methodReturns(OBJECT_TYPE))));
+              allOf(methodIsNamed("writeReplace"), methodReturns(OBJECT_TYPE))),
+          (t, s) -> isSubtype(getSymbol(t).owner.type, s.getSymtab().serializableType, s));
 
   public static final Matcher<Tree> IS_INTERFACE =
       (t, s) -> {
